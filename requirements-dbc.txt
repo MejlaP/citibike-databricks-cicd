@@ -6,7 +6,6 @@ charset-normalizer==3.4.9
 colorama==0.4.6
 comm==0.2.3
 cryptography==49.0.0
-dab_project @ file:///C:/Users/ice99/Documents/Kurzy/Udemy/CICD%20with%20Databricks/cicd-databricks-project/dab_project/dist/dab_project-0.0.1-py3-none-any.whl#sha256=c0e04c56b2387663f358508390429176ced9696bd1b8def14a33b02f1ef2a8f1
 databricks-connect==17.3.12
 databricks-sdk==0.121.0
 debugpy==1.8.21
