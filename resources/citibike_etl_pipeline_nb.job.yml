@@ -1,0 +1,62 @@
+resources:
+  jobs:
+    citibike_etl_pipeline_nb:                          # Unique key identifying this job within the bundle
+      name: citibike_etl_pipeline_nb_${bundle.target}  # Append the target name (dev/test/prod) to the job name.
+                                                       # Since test and prod share the same workspace (Free Edition
+                                                       # limitation), without this suffix they'd have identical
+                                                       # names and overwrite each other in Databricks Workflows.
+      tasks:
+        - task_key: 01_bronze_citibike        # First task: run the Bronze notebook
+          notebook_task:
+            notebook_path: ../citibike_etl/notebooks/01_bronze/01_bronze_citibike.ipynb
+            base_parameters:
+              pipeline_id: "{{job.id}}"
+              run_id: "{{job.run_id}}"
+              task_id: "{{task.run_id}}"
+              processed_timestamp: "{{job.start_time.iso_datetime}}"
+              catalog: "${var.catalog}"        # Injects the bundle's catalog variable (citibike_dev/test/prod)
+            source: WORKSPACE                  # Notebook is deployed/read from the Databricks workspace
+        - task_key: 02_silver_citibike
+          depends_on:
+            - task_key: 01_bronze_citibike     # Silver only runs after Bronze completes successfully
+          notebook_task:
+            notebook_path: ../citibike_etl/notebooks/02_silver/02_silver_citibike.ipynb
+            base_parameters:
+              pipeline_id: "{{job.id}}"
+              run_id: "{{job.run_id}}"
+              task_id: "{{task.run_id}}"
+              processed_timestamp: "{{job.start_time.iso_datetime}}"
+              catalog: "${var.catalog}"        # Injects the bundle's catalog variable (citibike_dev/test/prod)
+            source: WORKSPACE
+          environment_key: Default 
+
+        - task_key: 03_gold_citibike_daily_ride_summary
+          depends_on:
+            - task_key: 02_silver_citibike     # Both Gold tasks depend on Silver, so they can run in parallel
+          notebook_task:
+            notebook_path: ../citibike_etl/notebooks/03_gold/03_gold_citibike_daily_ride_summary.ipynb
+            source: WORKSPACE
+            base_parameters:
+              catalog: "${var.catalog}"        # Injects the bundle's catalog variable (citibike_dev/test/prod)
+
+        - task_key: 03_gold_citibike_daily_station_performance
+          depends_on:
+            - task_key: 02_silver_citibike
+          notebook_task:
+            notebook_path: ../citibike_etl/notebooks/03_gold/03_gold_citibike_daily_station_performance.ipynb
+            source: WORKSPACE
+            base_parameters:
+              catalog: "${var.catalog}"        # Injects the bundle's catalog variable (citibike_dev/test/prod)
+      environments:
+        - environment_key: Default
+          spec:
+            environment_version: '2'
+            dependencies:
+              - ../dist/*.whl               # Automatically installs the built wheel package (dab_project)
+                                               # onto the serverless compute before this task runs — so
+                                               # "from citibike.citibike_utils import ..." resolves without
+                                               # needing the manual sys.path/src. prefix trick
+
+      queue:
+        enabled: true                          # Allows multiple runs to queue instead of failing if one is already running
+      performance_target: PERFORMANCE_OPTIMIZED # Prioritizes faster serverless startup/execution over cost savings

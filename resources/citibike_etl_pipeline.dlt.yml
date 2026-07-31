@@ -1,0 +1,24 @@
+resources:
+  pipelines:
+    pipeline_citibike_etl_pipeline:                       # Unique key identifying this DLT pipeline within the bundle
+      name: citibike_etl_pipeline_${bundle.target}        # Append target name (dev/test/prod) — same pattern as
+                                                          # the jobs, to avoid name collisions in the shared workspace
+      catalog: "${var.catalog}"                           # Target catalog where DLT will create its tables
+      schema: "default"                                   # Target schema — NOTE: DLT writes ALL tables defined in
+                                                          # this pipeline (bronze, silver, gold) into this single
+                                                          # schema, unlike the classic approach where each layer
+                                                          # had its own schema (01_bronze, 02_silver, 03_gold)
+      configuration:
+        catalog: "${var.catalog}"                         # Available inside notebooks via spark.conf.get("catalog")
+      serverless: true                                    # Explicit serverless — no cluster definition needed
+      development: "${var.dev_flag}"                      # Use the dev_flag variable to determine if this is a dev pipeline
+      photon: true
+      libraries:
+        - notebook:
+            path: ../citibike_etl/dlt/01_bronze/01_bronze_citibike.ipynb
+        - notebook:
+            path: ../citibike_etl/dlt/02_silver/02_silver_citibike.ipynb
+        - notebook:
+            path: ../citibike_etl/dlt/03_gold/03_gold_citibike_daily_ride_summary.ipynb
+        - notebook:
+            path: ../citibike_etl/dlt/03_gold/03_gold_citibike_daily_station_performance.ipynb
