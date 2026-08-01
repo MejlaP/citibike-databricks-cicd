@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="dab_project", # Name of the package as it will be installed (pip show dab_project)
-    version="0.0.1",  # Package version — bump this when the code changes and is redistributed
+    version="0.0.2",  # Package version — bump this when the code changes and is redistributed
     description="This contains the code in the ./src directory of project",
     author="Milos",
     packages=find_packages(where="./src"),  # Auto-discover all packages (folders with __init__.py) under src/
