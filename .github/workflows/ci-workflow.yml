@@ -59,23 +59,22 @@ jobs:
         run: |
           which jq || echo "jq NOT FOUND"
           ls -la pytest-output.txt || echo "pytest-output.txt NOT FOUND"
-          ERROR_LOG=$(tail -n 80 pytest-output.txt | jq -Rs .)
-          echo "ERROR_LOG length: ${#ERROR_LOG}"
+          ERROR_LOG=$(tail -n 80 pytest-output.txt)
+
+          # Build the JSON payload with jq so the log gets escaped properly
+          PAYLOAD=$(jq -n --arg log "$ERROR_LOG" '{
+            contents: [{
+              parts: [{
+                text: ("You are helping a data engineer debug a failing CI pipeline. Below is the tail of a pytest run that failed. In 2-3 short sentences, explain in plain language what went wrong and what the likely cause is. Be specific, no boilerplate.\n\nPytest output:\n" + $log)
+              }]
+            }]
+          }')
 
           RESPONSE=$(curl -s -X POST \
             "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent" \
             -H "x-goog-api-key: ${{ secrets.GEMINI_API_KEY }}" \
             -H "Content-Type: application/json" \
-            -d @- <<EOF
-          {
-            "contents": [{
-              "parts": [{
-                "text": "You are helping a data engineer debug a failing CI pipeline. Below is the tail of a pytest run that failed. In 2-3 short sentences, explain in plain language what went wrong and what the likely cause is. Be specific, no boilerplate.\n\nPytest output:\n$ERROR_LOG"
-              }]
-            }]
-          }
-          EOF
-          )
+            -d "$PAYLOAD")
 
           # Extract the generated text; fall back to a placeholder if anything went wrong
           echo "--- Gemini raw response ---"
