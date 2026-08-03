@@ -57,8 +57,10 @@ jobs:
         id: ai_summary
         if: failure()
         run: |
-          # Take the last 80 lines of pytest output and JSON-escape them
+          which jq || echo "jq NOT FOUND"
+          ls -la pytest-output.txt || echo "pytest-output.txt NOT FOUND"
           ERROR_LOG=$(tail -n 80 pytest-output.txt | jq -Rs .)
+          echo "ERROR_LOG length: ${#ERROR_LOG}"
 
           RESPONSE=$(curl -s -X POST \
             "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent" \
