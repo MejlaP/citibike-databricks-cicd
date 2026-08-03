@@ -78,6 +78,9 @@ jobs:
           )
 
           # Extract the generated text; fall back to a placeholder if anything went wrong
+          echo "--- Gemini raw response ---"
+          echo "$RESPONSE"
+          echo "--- End response ---"
           SUMMARY=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // "AI summary unavailable"' | tr '\n' ' ' | sed "s/'/''/g")
           echo "summary=$SUMMARY" >> $GITHUB_OUTPUT
     
