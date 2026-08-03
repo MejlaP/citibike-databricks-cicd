@@ -13,6 +13,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+      
+      - name: Record start time
+        id: start_time
+        run: echo "started_at=$(date -u +%s)" >> $GITHUB_OUTPUT
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -41,6 +45,24 @@ jobs:
           databricks bundle deploy \
             --target test \
             --profile TEST
+
+      - name: Write metrics to Databricks
+        if: always()
+        run: |
+          END=$(date -u +%s)
+          DURATION=$((END - ${{ steps.start_time.outputs.started_at }}))
+          STARTED_AT=$(date -u -d @${{ steps.start_time.outputs.started_at }} +"%Y-%m-%d %H:%M:%S")
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.DATABRICKS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "${{ secrets.DATABRICKS_HOST }}/api/2.0/sql/statements" \
+            -d @- <<EOF
+          {
+            "warehouse_id": "${{ secrets.DATABRICKS_SQL_WAREHOUSE_ID }}",
+            "statement": "INSERT INTO citibike_dev.ops.cicd_metrics VALUES ('${{ github.run_id }}', '${{ github.workflow }}', 'Deploy to TEST', 'test', '${{ github.ref_name }}', '${{ job.status }}', $DURATION, '$STARTED_AT', NULL)",
+            "wait_timeout": "30s"
+          }
+          EOF
 
   cd-deploy-prod:
     name: Deploy to PROD
