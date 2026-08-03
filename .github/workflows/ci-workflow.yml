@@ -50,15 +50,13 @@ jobs:
 
       # On failure only, sends the tail of the pytest output to the Gemini API
       # and asks for a short plain-language explanation of what went wrong.
-      # The result is stored as a step output so the metrics step below can
-      # write it into the ai_summary column. Runs only on failure because
-      # there's nothing to explain when tests pass.
+      # The result is written to ai-summary.txt so the metrics step below can
+      # pick it up. Runs only on failure — there's nothing to explain when
+      # tests pass.
       - name: Summarize failure with Gemini
         id: ai_summary
         if: failure()
         run: |
-          which jq || echo "jq NOT FOUND"
-          ls -la pytest-output.txt || echo "pytest-output.txt NOT FOUND"
           ERROR_LOG=$(tail -n 80 pytest-output.txt)
 
           # Build the JSON payload with jq so the log gets escaped properly
@@ -76,10 +74,6 @@ jobs:
             -H "Content-Type: application/json" \
             -d "$PAYLOAD")
 
-          # Extract the generated text; fall back to a placeholder if anything went wrong
-          echo "--- Gemini raw response ---"
-          echo "$RESPONSE"
-          echo "--- End response ---"
           # Write the summary to a file — passing it through a step output would
           # let bash interpret backticks in the text as commands
           echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // "AI summary unavailable"' | tr '\n' ' ' > ai-summary.txt
