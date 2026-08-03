@@ -80,8 +80,9 @@ jobs:
           echo "--- Gemini raw response ---"
           echo "$RESPONSE"
           echo "--- End response ---"
-          SUMMARY=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // "AI summary unavailable"' | tr '\n' ' ' | sed "s/'/''/g")
-          echo "summary=$SUMMARY" >> $GITHUB_OUTPUT
+          # Write the summary to a file — passing it through a step output would
+          # let bash interpret backticks in the text as commands
+          echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // "AI summary unavailable"' | tr '\n' ' ' > ai-summary.txt
     
       # Logs this run's outcome to the cicd_metrics table in Databricks via the
       # SQL Statement Execution API. Uses if: always() so failed runs get logged
@@ -96,23 +97,41 @@ jobs:
           DURATION=$((END - ${{ steps.start_time.outputs.started_at }}))
           STARTED_AT=$(date -u -d @${{ steps.start_time.outputs.started_at }} +"%Y-%m-%d %H:%M:%S")
 
-          # Wrap the AI summary in SQL quotes, or use NULL if there isn't one
-          # (i.e. the run succeeded, so the Gemini step was skipped)
-          RAW_SUMMARY="${{ steps.ai_summary.outputs.summary }}"
-          if [ -z "$RAW_SUMMARY" ]; then
-            AI_SUMMARY="NULL"
+          # Read the AI summary from file if the Gemini step created one,
+          # otherwise leave it empty (the run succeeded)
+          if [ -f ai-summary.txt ]; then
+            RAW_SUMMARY=$(cat ai-summary.txt)
           else
-            AI_SUMMARY="'$RAW_SUMMARY'"
+            RAW_SUMMARY=""
           fi
+
+          # Build the SQL statement with jq so quotes in the summary get escaped
+          STATEMENT=$(jq -rn \
+            --arg run_id "${{ github.run_id }}" \
+            --arg wf "${{ github.workflow }}" \
+            --arg branch "${{ github.ref_name }}" \
+            --arg status "${{ job.status }}" \
+            --arg duration "$DURATION" \
+            --arg started "$STARTED_AT" \
+            --arg summary "$RAW_SUMMARY" \
+            '"INSERT INTO citibike_dev.ops.cicd_metrics VALUES (" +
+             "\u0027" + $run_id + "\u0027, " +
+             "\u0027" + $wf + "\u0027, " +
+             "\u0027CI Job\u0027, \u0027n-a\u0027, " +
+             "\u0027" + $branch + "\u0027, " +
+             "\u0027" + $status + "\u0027, " +
+             $duration + ", " +
+             "\u0027" + $started + "\u0027, " +
+             (if $summary == "" then "NULL" else "\u0027" + ($summary | gsub("\u0027"; "\u0027\u0027")) + "\u0027" end) +
+             ")"')
+
+          PAYLOAD=$(jq -n \
+            --arg wid "${{ secrets.DATABRICKS_SQL_WAREHOUSE_ID }}" \
+            --arg stmt "$STATEMENT" \
+            '{warehouse_id: $wid, statement: $stmt, wait_timeout: "30s"}')
 
           curl -s -X POST \
             -H "Authorization: Bearer ${{ secrets.DATABRICKS_TOKEN }}" \
             -H "Content-Type: application/json" \
             "${{ secrets.DATABRICKS_HOST }}/api/2.0/sql/statements" \
-            -d @- <<EOF
-          {
-            "warehouse_id": "${{ secrets.DATABRICKS_SQL_WAREHOUSE_ID }}",
-            "statement": "INSERT INTO citibike_dev.ops.cicd_metrics VALUES ('${{ github.run_id }}', '${{ github.workflow }}', 'CI Job', 'n-a', '${{ github.ref_name }}', '${{ job.status }}', $DURATION, '$STARTED_AT', $AI_SUMMARY)",
-            "wait_timeout": "30s"
-          }
-          EOF
+            -d "$PAYLOAD"
