@@ -15,5 +15,5 @@ def test_timestamp_to_date_col(spark):
 
     # first() gets just the first row — fine here since we only have one row
     row = result_df.select("ride_date").first()
-    expected_date = datetime.date(2025, 4, 10)  # Expected: 2025-04-10
+    expected_date = datetime.date(2025, 1, 1)  # TEMPORARY: deliberately wrong to test AI summary
     assert row["ride_date"] == expected_date

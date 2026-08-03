@@ -36,10 +36,11 @@ jobs:
 
       - name: Run pytest & generate coverage report
         run: |
+          set -o pipefail
           pytest \
             --disable-warnings \
             --cov=./src \
-            --cov-report=html
+            --cov-report=html 2>&1 | tee pytest-output.txt
 
       - name: Upload coverage HTML report
         uses: actions/upload-artifact@v4
@@ -47,18 +48,59 @@ jobs:
           name: coverage-html
           path: htmlcov
 
+      # On failure only, sends the tail of the pytest output to the Gemini API
+      # and asks for a short plain-language explanation of what went wrong.
+      # The result is stored as a step output so the metrics step below can
+      # write it into the ai_summary column. Runs only on failure because
+      # there's nothing to explain when tests pass.
+      - name: Summarize failure with Gemini
+        id: ai_summary
+        if: failure()
+        run: |
+          # Take the last 80 lines of pytest output and JSON-escape them
+          ERROR_LOG=$(tail -n 80 pytest-output.txt | jq -Rs .)
+
+          RESPONSE=$(curl -s -X POST \
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent" \
+            -H "x-goog-api-key: ${{ secrets.GEMINI_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d @- <<EOF
+          {
+            "contents": [{
+              "parts": [{
+                "text": "You are helping a data engineer debug a failing CI pipeline. Below is the tail of a pytest run that failed. In 2-3 short sentences, explain in plain language what went wrong and what the likely cause is. Be specific, no boilerplate.\n\nPytest output:\n$ERROR_LOG"
+              }]
+            }]
+          }
+          EOF
+          )
+
+          # Extract the generated text; fall back to a placeholder if anything went wrong
+          SUMMARY=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // "AI summary unavailable"' | tr '\n' ' ' | sed "s/'/''/g")
+          echo "summary=$SUMMARY" >> $GITHUB_OUTPUT
+    
       # Logs this run's outcome to the cicd_metrics table in Databricks via the
       # SQL Statement Execution API. Uses if: always() so failed runs get logged
       # too — those are the interesting ones for the dashboard. Duration is
       # calculated from the unix timestamp captured in the "Record start time"
-      # step at the top of the job. The ai_summary column is left NULL here;
-      # it gets populated separately by the Gemini failure-summary step.
+      # step at the top of the job. The ai_summary column is populated from the Gemini step above when the
+      # run failed, otherwise it stays NULL.
       - name: Write metrics to Databricks
         if: always()
         run: |
           END=$(date -u +%s)
           DURATION=$((END - ${{ steps.start_time.outputs.started_at }}))
           STARTED_AT=$(date -u -d @${{ steps.start_time.outputs.started_at }} +"%Y-%m-%d %H:%M:%S")
+
+          # Wrap the AI summary in SQL quotes, or use NULL if there isn't one
+          # (i.e. the run succeeded, so the Gemini step was skipped)
+          RAW_SUMMARY="${{ steps.ai_summary.outputs.summary }}"
+          if [ -z "$RAW_SUMMARY" ]; then
+            AI_SUMMARY="NULL"
+          else
+            AI_SUMMARY="'$RAW_SUMMARY'"
+          fi
+
           curl -s -X POST \
             -H "Authorization: Bearer ${{ secrets.DATABRICKS_TOKEN }}" \
             -H "Content-Type: application/json" \
@@ -66,7 +108,7 @@ jobs:
             -d @- <<EOF
           {
             "warehouse_id": "${{ secrets.DATABRICKS_SQL_WAREHOUSE_ID }}",
-            "statement": "INSERT INTO citibike_dev.ops.cicd_metrics VALUES ('${{ github.run_id }}', '${{ github.workflow }}', 'CI Job', 'n-a', '${{ github.ref_name }}', '${{ job.status }}', $DURATION, '$STARTED_AT', NULL)",
+            "statement": "INSERT INTO citibike_dev.ops.cicd_metrics VALUES ('${{ github.run_id }}', '${{ github.workflow }}', 'CI Job', 'n-a', '${{ github.ref_name }}', '${{ job.status }}', $DURATION, '$STARTED_AT', $AI_SUMMARY)",
             "wait_timeout": "30s"
           }
           EOF
