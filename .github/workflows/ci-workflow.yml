@@ -16,6 +16,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Captures a unix timestamp at job start so the metrics step at the end
+      # can calculate how long the job took. GitHub Actions doesn't expose job
+      # duration as a built-in variable, so we track it ourselves.
       - name: Record start time
         id: start_time
         run: echo "started_at=$(date -u +%s)" >> $GITHUB_OUTPUT
@@ -44,6 +47,12 @@ jobs:
           name: coverage-html
           path: htmlcov
 
+      # Logs this run's outcome to the cicd_metrics table in Databricks via the
+      # SQL Statement Execution API. Uses if: always() so failed runs get logged
+      # too — those are the interesting ones for the dashboard. Duration is
+      # calculated from the unix timestamp captured in the "Record start time"
+      # step at the top of the job. The ai_summary column is left NULL here;
+      # it gets populated separately by the Gemini failure-summary step.
       - name: Write metrics to Databricks
         if: always()
         run: |
