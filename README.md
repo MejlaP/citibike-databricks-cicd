@@ -199,9 +199,7 @@ The last row is a good example: because `test` and `prod` both use `mode: produc
 
 ## 🤝 Course Inspiration & Credit
 
-*(add your course link here)*
-
-This project follows the structure of a Udemy course on CI/CD with Databricks Asset Bundles. The core CI/CD concepts and Medallion structure come from the course; the following were developed independently:
+This project follows the structure of a Udemy course "CI/CD with Databricks (Declarative Automation Bundles)" by Malvik Vaghadia. The core CI/CD concepts and Medallion structure come from the course; the following were developed independently:
 
 - **Platform adaptation:** the entire Free Edition setup (serverless, PAT auth, single-workspace/multi-catalog design) — see the deviations table above.
 - **Pipeline observability:** the `cicd_metrics` table, writing run metrics from GitHub Actions via the SQL Statement Execution API, and the CI/CD Power BI dashboard.
