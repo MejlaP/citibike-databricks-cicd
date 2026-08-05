@@ -1,5 +1,7 @@
 # Citi Bike CI/CD Data Pipeline (Databricks Asset Bundles)
 
+![CI](https://github.com/MejlaP/citibike-databricks-cicd/actions/workflows/ci-workflow.yml/badge.svg)
+
 ## 📌 Project Overview
 
 This project is a hands-on **CI/CD and data engineering** pipeline built around Citi Bike trip data. It combines the **Medallion Architecture** (Landing → Bronze → Silver → Gold) with a full **CI/CD workflow** based on Databricks Asset Bundles and GitHub Actions, covering three environments (dev / test / prod).
