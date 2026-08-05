@@ -120,11 +120,9 @@ This diagnosis was **confirmed empirically by CI**: the exact same tests pass on
 ## 📊 Power BI Dashboards
 
 **Dashboard 1 — CI/CD Metrics:** Deployment frequency, success rate, average duration and failure count, broken down by job and environment, with a table of recent failures including the AI-generated error summaries.
-
 <img width="1402" height="797" alt="metrics" src="https://github.com/user-attachments/assets/a17e448a-61b9-4913-9933-49dcf953bc36" />
 
 **Dashboard 2 — Citi Bike Analytics:** Ride volume trends over time, top stations by trip count and average duration, and a scatter plot for spotting station-level outliers.
-
 <img width="1412" height="792" alt="analytics" src="https://github.com/user-attachments/assets/6e962b94-0113-49b3-bc34-b0dd3bfba8cb" />
 
 **A note on data sources:** Dashboard 2 connects to the Gold tables in `citibike_prod`. Dashboard 1 reads from `citibike_dev.ops.cicd_metrics` — a single shared table across all environments, by design: pipeline run metrics are operational telemetry about the deployment process itself, not environment-specific business data, and keeping them in one place avoids unioning three sources in Power BI.
