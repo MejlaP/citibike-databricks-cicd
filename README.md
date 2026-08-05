@@ -18,7 +18,7 @@ The entire project runs on the free **Databricks Free Edition** (serverless-only
 
 ## 🔄 Medallion Architecture
 
-*(insert your Medallion diagram image here)*
+<img width="1392" height="592" alt="citibke_medallion" src="https://github.com/user-attachments/assets/d1dd9848-7849-4d47-a015-ef80db4386eb" />
 
 Data flows through four layers, replicated across three catalogs (`citibike_dev`, `citibike_test`, `citibike_prod`):
 
